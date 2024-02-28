@@ -67,7 +67,7 @@ void Sender_Final()
 void Sender_FromUpperLayer(struct message *msg)
 {
     send_mutex.lock();
-    fprintf(stdout, "At %.2fs: sender lock in Sender_FromUpperLayer\n", GetSimulationTime());
+    // fprintf(stdout, "At %.2fs: sender lock in Sender_FromUpperLayer\n", GetSimulationTime());
 
     /* the cursor always points to the first unsent byte in the message */
     int cursor = 0;
@@ -92,7 +92,7 @@ void Sender_FromUpperLayer(struct message *msg)
             Sender_ToLowerLayer(&pkt);
             Sender_StartTimer(TIME_OUT_VALUE);
             packet_in_window++;
-            fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), sequence_number);
+            // fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), sequence_number);
         }
 
         /* save the packet in the buffer */
@@ -106,7 +106,7 @@ void Sender_FromUpperLayer(struct message *msg)
     }
 
     send_mutex.unlock();
-    fprintf(stdout, "At %.2fs: sender unlock in Sender_FromUpperLayer\n", GetSimulationTime());
+    // fprintf(stdout, "At %.2fs: sender unlock in Sender_FromUpperLayer\n", GetSimulationTime());
 }
 
 /* event handler, called when a packet is passed from the lower layer at the
@@ -114,11 +114,11 @@ void Sender_FromUpperLayer(struct message *msg)
 void Sender_FromLowerLayer(struct packet *pkt)
 {
     send_mutex.lock();
-    fprintf(stdout, "At %.2fs: sender lock in Sender_FromLowerLayer\n", GetSimulationTime());
+    // fprintf(stdout, "At %.2fs: sender lock in Sender_FromLowerLayer\n", GetSimulationTime());
 
     /* get ack number, base + WINDOW_SIZE > ack number >= base */
     int ack_number = *(int *)(pkt->data + 1);
-    fprintf(stdout, "At %.2fs: sender receiving ack %d ...\n", GetSimulationTime(), ack_number);
+    // fprintf(stdout, "At %.2fs: sender receiving ack %d ...\n", GetSimulationTime(), ack_number);
 
     /* update the packet buffer */
     for (auto it = packet_buffer.begin(); it != packet_buffer.end() && it != packet_buffer.begin() + WINDOW_SIZE; it++)
@@ -133,9 +133,9 @@ void Sender_FromLowerLayer(struct packet *pkt)
             if (packet_buffer.size() >= WINDOW_SIZE)
             {
                 /* send the packet */
-                Sender_ToLowerLayer(&packet_buffer[0]);
+                Sender_ToLowerLayer(&packet_buffer[9]);
                 Sender_StartTimer(TIME_OUT_VALUE);
-                fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), *(int *)(packet_buffer[0].data + 1));
+                // fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), *(int *)(packet_buffer[0].data + 1));
             }
             else
             {
@@ -147,23 +147,23 @@ void Sender_FromLowerLayer(struct packet *pkt)
     }
 
     send_mutex.unlock();
-    fprintf(stdout, "At %.2fs: sender unlock in Sender_FromLowerLayer\n", GetSimulationTime());
+    // fprintf(stdout, "At %.2fs: sender unlock in Sender_FromLowerLayer\n", GetSimulationTime());
 }
 
 /* event handler, called when the timer expires */
 void Sender_Timeout()
 {
     send_mutex.lock();
-    fprintf(stdout, "At %.2fs: sender lock in Sender_Timeout\n", GetSimulationTime());
+    // fprintf(stdout, "At %.2fs: sender lock in Sender_Timeout\n", GetSimulationTime());
 
     /* resend all packets in the window */
     for (int i = 0; i < packet_in_window; i++)
     {
         Sender_ToLowerLayer(&packet_buffer[i]);
         Sender_StartTimer(TIME_OUT_VALUE);
-        fprintf(stdout, "At %.2fs: sender resending packet %d ...\n", GetSimulationTime(), *(int *)(packet_buffer[i].data + 1));
+        // fprintf(stdout, "At %.2fs: sender resending packet %d ...\n", GetSimulationTime(), *(int *)(packet_buffer[i].data + 1));
     }
 
     send_mutex.unlock();
-    fprintf(stdout, "At %.2fs: sender unlock in Sender_Timeout\n", GetSimulationTime());
+    // fprintf(stdout, "At %.2fs: sender unlock in Sender_Timeout\n", GetSimulationTime());
 }

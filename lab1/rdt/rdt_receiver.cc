@@ -60,14 +60,17 @@ void Receiver_Final()
    receiver */
 void Receiver_FromLowerLayer(struct packet *pkt)
 {
-    /* construct a message */
-    struct message *msg = (struct message *)malloc(sizeof(struct message));
-    ASSERT(msg != NULL);
-
     /* get payload size, sequence number, and checksum */
     int payload_size = pkt->data[0];
     int sequence_number = *(int *)(pkt->data + 1);
     int checksum_got = *(int *)(pkt->data + 5);
+
+    /* if payload size is smaller than 0 or larger than 119, ignore it */
+    if (payload_size <= 0 || payload_size > 119)
+    {
+        // fprintf(stdout, "At %.2fs: receiver: payload size error\n", GetSimulationTime());
+        return;
+    }
 
     /* calculate the checksum */
     std::string payload = std::string(pkt->data + 9, payload_size);
@@ -77,7 +80,7 @@ void Receiver_FromLowerLayer(struct packet *pkt)
     if (checksum_got == checksum_cal)
     {
         receive_mutex.lock();
-        fprintf(stdout, "At %.2fs: receiver: lock %d\n", GetSimulationTime(), sequence_number);
+        // fprintf(stdout, "At %.2fs: receiver: lock %d\n", GetSimulationTime(), sequence_number);
 
         /* send ack to the sender */
         struct packet ack_pkt;
@@ -85,8 +88,20 @@ void Receiver_FromLowerLayer(struct packet *pkt)
         memcpy(ack_pkt.data + 1, &sequence_number, 4);
         Receiver_ToLowerLayer(&ack_pkt);
 
+        /* if sequence number is smaller than expected, ignore it */
+        if (sequence_number < expected_sequence_number)
+        {
+            receive_mutex.unlock();
+            // fprintf(stdout, "At %.2fs: receiver: unlock %d\n", GetSimulationTime(), sequence_number);
+            return;
+        }
+
         if (sequence_number == expected_sequence_number)
         {
+            /* construct a message */
+            struct message *msg = (struct message *)malloc(sizeof(struct message));
+            ASSERT(msg != NULL);
+
             /* update the expected sequence number */
             expected_sequence_number++;
 
@@ -98,13 +113,20 @@ void Receiver_FromLowerLayer(struct packet *pkt)
 
             /* deliver the message to the upper layer */
             Receiver_ToUpperLayer(msg);
-            fprintf(stdout, "At %.2fs: receiver: deliver packet %d\n", GetSimulationTime(), sequence_number);
+            // fprintf(stdout, "At %.2fs: receiver: deliver packet %d\n", GetSimulationTime(), sequence_number);
 
             /* check if there are any packets in the buffer that can be delivered */
-            for (auto it = receiver_packet_buffer.begin(); it != receiver_packet_buffer.end();)
+            for (auto it = receiver_packet_buffer.begin(); it < receiver_packet_buffer.end();)
             {
                 /* get sequence number */
                 int sequence_number = *(int *)(it->data + 1);
+
+                /* if the sequence number is smaller than expected, delete it */
+                if (sequence_number < expected_sequence_number)
+                {
+                    it = receiver_packet_buffer.erase(it);
+                    continue;
+                }
 
                 /* if the sequence number is expected */
                 if (sequence_number == expected_sequence_number)
@@ -114,16 +136,17 @@ void Receiver_FromLowerLayer(struct packet *pkt)
 
                     /* copy the payload to the message */
                     msg->size = it->data[0];
+                    free(msg->data);
                     msg->data = (char *)malloc(msg->size);
                     ASSERT(msg->data != NULL);
                     memcpy(msg->data, it->data + 9, msg->size);
 
                     /* deliver the message to the upper layer */
                     Receiver_ToUpperLayer(msg);
-                    fprintf(stdout, "At %.2fs: receiver: deliver packet %d\n", GetSimulationTime(), sequence_number);
+                    // fprintf(stdout, "At %.2fs: receiver: deliver packet %d\n", GetSimulationTime(), sequence_number);
 
                     /* remove the packet from the buffer */
-                    it = receiver_packet_buffer.erase(it);
+                    receiver_packet_buffer.erase(it);
 
                     /* set the iterator to the beginning */
                     it = receiver_packet_buffer.begin();
@@ -133,26 +156,26 @@ void Receiver_FromLowerLayer(struct packet *pkt)
                     it++;
                 }
             }
+
+            /* don't forget to free the space */
+            if (msg->data != NULL)
+                free(msg->data);
+            if (msg != NULL)
+                free(msg);
         }
         else
         {
             /* save the packet in the buffer */
             receiver_packet_buffer.push_back(*pkt);
-            fprintf(stdout, "At %.2fs: receiver: buffer packet %d\n", GetSimulationTime(), sequence_number);
+            // fprintf(stdout, "At %.2fs: receiver: buffer packet %d\n", GetSimulationTime(), sequence_number);
         }
 
         receive_mutex.unlock();
-        fprintf(stdout, "At %.2fs: receiver: unlock %d\n", GetSimulationTime(), sequence_number);
+        // fprintf(stdout, "At %.2fs: receiver: unlock %d\n", GetSimulationTime(), sequence_number);
     }
     else
     {
         /* if the checksum is incorrect */
-        fprintf(stdout, "At %.2fs: receiver: checksum error\n", GetSimulationTime());
+        // fprintf(stdout, "At %.2fs: receiver: checksum error\n", GetSimulationTime());
     }
-
-    /* don't forget to free the space */
-    if (msg->data != NULL)
-        free(msg->data);
-    if (msg != NULL)
-        free(msg);
 }

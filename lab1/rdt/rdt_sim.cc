@@ -444,7 +444,7 @@ int main(int argc, char *argv[])
 	case EVENT_SENDER_FROMUPPERLAYER:
 	    {
 		if (tracing_level>=1) {
-		    fprintf(stdout, "Time %.2fs (Sender): the upper layer instructs rdt layer to send out a message.\n", sim_core.time());
+		    // fprintf(stdout, "Time %.2fs (Sender): the upper layer instructs rdt layer to send out a message.\n", sim_core.time());
 		}
 
 		EventSenderFromUpperLayer *real_e = (EventSenderFromUpperLayer*) e;
@@ -467,7 +467,7 @@ int main(int argc, char *argv[])
 	case EVENT_SENDER_FROMLOWERLAYER:
 	    {
 		if (tracing_level>=1) {
-		    fprintf(stdout, "Time %.2fs (Sender): the lower layer informs the rdt layer that a packet is received from the link.\n", sim_core.time());
+		    // fprintf(stdout, "Time %.2fs (Sender): the lower layer informs the rdt layer that a packet is received from the link.\n", sim_core.time());
 		}
 
 		EventSenderFromLowerLayer *real_e = (EventSenderFromLowerLayer*) e;
@@ -495,7 +495,7 @@ int main(int argc, char *argv[])
 	case EVENT_RECEIVER_FROMLOWERLAYER:
 	    {
 		if (tracing_level>=1) {
-		    fprintf(stdout, "Time %.2fs (Receiver): the lower layer informs the rdt layer that a packet is received from the link.\n", sim_core.time());
+		    // fprintf(stdout, "Time %.2fs (Receiver): the lower layer informs the rdt layer that a packet is received from the link.\n", sim_core.time());
 		}
 
 		EventReceiverFromLowerLayer *real_e = (EventReceiverFromLowerLayer*) e;

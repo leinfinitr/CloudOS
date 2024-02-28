@@ -116,7 +116,7 @@ void Sender_FromLowerLayer(struct packet *pkt)
     send_mutex.lock();
     // fprintf(stdout, "At %.2fs: sender lock in Sender_FromLowerLayer\n", GetSimulationTime());
 
-    /* get ack number, base + WINDOW_SIZE > ack number >= base */
+    /* get ack number */
     int ack_number = *(int *)(pkt->data + 1);
     // fprintf(stdout, "At %.2fs: sender receiving ack %d ...\n", GetSimulationTime(), ack_number);
 

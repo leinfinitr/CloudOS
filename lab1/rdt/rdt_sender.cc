@@ -34,13 +34,15 @@
 #include "rdt_sender.h"
 
 // ------------------------- 常量定义 -------------------------
-const int WINDOW_SIZE = 10;                   // 窗口大小
-const int MAX_PAYLOAD_SIZE = RDT_PKTSIZE - 9; // 最大 payload 大小
+#define WINDOW_SIZE 10       // 窗口大小
+#define MAX_PAYLOAD_SIZE 119 // 最大 payload 大小 (128 - 1 - 4 - 4)
+#define TIME_OUT_VALUE 0.3   // 定时器
 
 // ------------------------- 全局变量 -------------------------
 std::vector<packet> packet_buffer; // 数据包缓冲区
 int sequence_number = 0;           // 数据包的序列号
 std::mutex send_mutex;             // 互斥锁
+int packet_in_window = 0;          // 窗口内的数据包数量
 
 // ------------------------- 函数声明 -------------------------
 std::hash<std::string> hash_fn; // hash 函数
@@ -65,70 +67,103 @@ void Sender_Final()
 void Sender_FromUpperLayer(struct message *msg)
 {
     send_mutex.lock();
+    fprintf(stdout, "At %.2fs: sender lock in Sender_FromUpperLayer\n", GetSimulationTime());
 
     /* the cursor always points to the first unsent byte in the message */
     int cursor = 0;
 
-    while (msg->size - cursor > MAX_PAYLOAD_SIZE)
+    while (msg->size - cursor > 0)
     {
+        /* calculate payload size*/
+        int payload_size = std::min(MAX_PAYLOAD_SIZE, msg->size - cursor);
         /* calculate checksum */
-        std::string payload(msg->data + cursor, MAX_PAYLOAD_SIZE);
-        int checksum = hash_fn(std::to_string(MAX_PAYLOAD_SIZE) + std::to_string(sequence_number) + payload);
+        std::string payload(msg->data + cursor, payload_size);
+        int checksum = hash_fn(std::to_string(payload_size) + std::to_string(sequence_number) + payload);
         /* fill in the packet */
         packet pkt;
-        pkt.data[0] = MAX_PAYLOAD_SIZE;
+        pkt.data[0] = payload_size;
         memcpy(pkt.data + 1, &sequence_number, 4);
         memcpy(pkt.data + 5, &checksum, 4);
-        memcpy(pkt.data + 9, msg->data + cursor, MAX_PAYLOAD_SIZE);
+        memcpy(pkt.data + 9, msg->data + cursor, payload_size);
 
         /* send it out through the lower layer */
-        Sender_ToLowerLayer(&pkt);
-        fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), sequence_number);
+        if (packet_in_window < WINDOW_SIZE)
+        {
+            Sender_ToLowerLayer(&pkt);
+            Sender_StartTimer(TIME_OUT_VALUE);
+            packet_in_window++;
+            fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), sequence_number);
+        }
 
         /* save the packet in the buffer */
         packet_buffer.push_back(pkt);
 
         /* move the cursor */
-        cursor += MAX_PAYLOAD_SIZE;
-
-        /* update the sequence number */
-        sequence_number++;
-    }
-
-    /* send out the last packet */
-    if (msg->size > cursor)
-    {
-        /* calculate checksum */
-        std::string payload(msg->data + cursor, msg->size - cursor);
-        int checksum = hash_fn(std::to_string(msg->size - cursor) + std::to_string(sequence_number) + payload);
-        /* fill in the packet */
-        packet pkt;
-        pkt.data[0] = msg->size - cursor;
-        memcpy(pkt.data + 1, &sequence_number, 4);
-        memcpy(pkt.data + 5, &checksum, 4);
-        memcpy(pkt.data + 9, msg->data + cursor, pkt.data[0]);
-
-        /* send it out through the lower layer */
-        Sender_ToLowerLayer(&pkt);
-        fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), sequence_number);
-
-        /* save the packet in the buffer */
-        packet_buffer.push_back(pkt);
+        cursor += payload_size;
 
         /* update the sequence number */
         sequence_number++;
     }
 
     send_mutex.unlock();
+    fprintf(stdout, "At %.2fs: sender unlock in Sender_FromUpperLayer\n", GetSimulationTime());
 }
 
 /* event handler, called when a packet is passed from the lower layer at the
    sender */
 void Sender_FromLowerLayer(struct packet *pkt)
 {
+    send_mutex.lock();
+    fprintf(stdout, "At %.2fs: sender lock in Sender_FromLowerLayer\n", GetSimulationTime());
+
+    /* get ack number, base + WINDOW_SIZE > ack number >= base */
+    int ack_number = *(int *)(pkt->data + 1);
+    fprintf(stdout, "At %.2fs: sender receiving ack %d ...\n", GetSimulationTime(), ack_number);
+
+    /* update the packet buffer */
+    for (auto it = packet_buffer.begin(); it != packet_buffer.end() && it != packet_buffer.begin() + WINDOW_SIZE; it++)
+    {
+        int sequence_number = *(int *)(it->data + 1);
+        if (sequence_number == ack_number)
+        {
+            /* remove the packet from the buffer */
+            it = packet_buffer.erase(it);
+
+            /* if there are packets in the buffer that can be sent */
+            if (packet_buffer.size() >= WINDOW_SIZE)
+            {
+                /* send the packet */
+                Sender_ToLowerLayer(&packet_buffer[0]);
+                Sender_StartTimer(TIME_OUT_VALUE);
+                fprintf(stdout, "At %.2fs: sender sending packet %d ...\n", GetSimulationTime(), *(int *)(packet_buffer[0].data + 1));
+            }
+            else
+            {
+                packet_in_window--;
+            }
+
+            break;
+        }
+    }
+
+    send_mutex.unlock();
+    fprintf(stdout, "At %.2fs: sender unlock in Sender_FromLowerLayer\n", GetSimulationTime());
 }
 
 /* event handler, called when the timer expires */
 void Sender_Timeout()
 {
+    send_mutex.lock();
+    fprintf(stdout, "At %.2fs: sender lock in Sender_Timeout\n", GetSimulationTime());
+
+    /* resend all packets in the window */
+    for (int i = 0; i < packet_in_window; i++)
+    {
+        Sender_ToLowerLayer(&packet_buffer[i]);
+        Sender_StartTimer(TIME_OUT_VALUE);
+        fprintf(stdout, "At %.2fs: sender resending packet %d ...\n", GetSimulationTime(), *(int *)(packet_buffer[i].data + 1));
+    }
+
+    send_mutex.unlock();
+    fprintf(stdout, "At %.2fs: sender unlock in Sender_Timeout\n", GetSimulationTime());
 }

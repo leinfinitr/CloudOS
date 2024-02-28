@@ -77,10 +77,16 @@ void Receiver_FromLowerLayer(struct packet *pkt)
     if (checksum_got == checksum_cal)
     {
         receive_mutex.lock();
+        fprintf(stdout, "At %.2fs: receiver: lock %d\n", GetSimulationTime(), sequence_number);
+
+        /* send ack to the sender */
+        struct packet ack_pkt;
+        ack_pkt.data[0] = 0;
+        memcpy(ack_pkt.data + 1, &sequence_number, 4);
+        Receiver_ToLowerLayer(&ack_pkt);
 
         if (sequence_number == expected_sequence_number)
         {
-
             /* update the expected sequence number */
             expected_sequence_number++;
 
@@ -136,6 +142,7 @@ void Receiver_FromLowerLayer(struct packet *pkt)
         }
 
         receive_mutex.unlock();
+        fprintf(stdout, "At %.2fs: receiver: unlock %d\n", GetSimulationTime(), sequence_number);
     }
     else
     {

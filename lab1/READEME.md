@@ -4,7 +4,7 @@ Author: *刘佳隆*
 
 Student ID: *518010910009*
 
-Email: *liujl01@sjtu.edu.cn*
+Email: *<liujl01@sjtu.edu.cn>*
 
 ## 目录
 
